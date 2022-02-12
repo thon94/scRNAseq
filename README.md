@@ -1,1 +1,1 @@
-# gcn-gat
+# scRNAseq methods
