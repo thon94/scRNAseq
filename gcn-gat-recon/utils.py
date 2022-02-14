@@ -3,22 +3,27 @@ import pandas as pd
 import scipy.sparse as sp
 import torch
 import random
+from sklearn.preprocessing import Normalizer
+import math
+from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.utils.data as Data
+from sklearn.metrics.pairwise import euclidean_distances
 import os
+from sklearn import preprocessing
+from sklearn import linear_model
 from collections import Counter
 
 def spilt_dataset(train_all_data, labels, shuffle_index):
         
-    train_size, val_size = int(len(shuffle_index)* 0.8), int(len(shuffle_index)* 0.9)
+    train_size, val_size = int(len(shuffle_index)* 0.8), int(len(shuffle_index)* 1.0)
     train_data = np.asarray(train_all_data).astype(np.float32)[shuffle_index[0:train_size]]
     val_data = np.asarray(train_all_data).astype(np.float32)[shuffle_index[train_size:val_size]]
     test_data = np.asarray(train_all_data).astype(np.float32)[shuffle_index[val_size:]]
     train_labels = labels[shuffle_index[0:train_size]]
     val_labels = labels[shuffle_index[train_size:val_size]]
     test_labels = labels[shuffle_index[val_size:]]
-        
-    ll, cnt = np.unique(train_labels,return_counts=True)
+    # ll, cnt = np.unique(train_labels,return_counts=True)
     return train_data, val_data, test_data, train_labels, val_labels, test_labels
     
 
@@ -39,7 +44,10 @@ def generate_loader(train_data, val_data, test_data, train_labels, val_labels, t
     dset_val = Data.TensorDataset(val_data, val_labels)
     val_loader = Data.DataLoader(dset_val, batch_size = len(dset_val), shuffle = False)
     dset_test = Data.TensorDataset(test_data, test_labels)
-    test_loader = Data.DataLoader(dset_test, batch_size = len(dset_test), shuffle = False)
+    try:
+        test_loader = Data.DataLoader(dset_test, batch_size = len(dset_test), shuffle = False)
+    except ValueError:
+        test_loader = None
 
     # split validation set into smaller sets
     n_val_splits = 4
@@ -155,6 +163,7 @@ def load_largesc(path, dirAdj, dataset, net):
     if dataset == 'Zhengsorted':
         csv_name = os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data.csv'
         npz_name = os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data.npz'
+        # npz_name = os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data_short.npz'
         
     elif dataset == 'TM':
         csv_name = os.path.join(path + dataset) +'/Filtered_TM_data.csv'
@@ -213,6 +222,7 @@ def load_largesc(path, dirAdj, dataset, net):
         shuffle_index = None
     
     return adj, features, labels, shuffle_index  # cells*genes
+
 
 
 
