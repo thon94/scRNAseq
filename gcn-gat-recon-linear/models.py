@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from copy import deepcopy
 from layers import GraphAttentionLayer, SpGraphAttentionLayer
-from lib.coarsening import lmax_L, rescale_L, laplacian
-from lib.utilsdata import sparse_mx_to_torch_sparse_tensor
+from coarsening import lmax_L, rescale_L, laplacian
+from utils import sparse_mx_to_torch_sparse_tensor
 
 
 class my_sparse_mm(torch.autograd.Function):
@@ -30,7 +31,7 @@ class my_sparse_mm(torch.autograd.Function):
 
 
 class GAT(nn.Module):
-    def __init__(self, nfeat, nhid, nclass, dropout, alpha, nheads, n_gene=1000, poolsize=8):
+    def __init__(self, nfeat, nhid, nclass, dropout, alpha, nheads, n_gene=1000, poolsize=8, nn_embed=64):
         """Dense version of GAT."""
         """
             nfeat: in_features (F)
@@ -48,26 +49,52 @@ class GAT(nn.Module):
         for i, attention in enumerate(self.attentions):
             self.add_module('attention_{}'.format(i), attention)
 
-        self.fc1 = nn.Linear(nhid * nheads * n_gene // poolsize, 250)
-        self.fc2 = nn.Linear(250, nclass)
-        # self.fc3 = nn.Linear(250, nclass)
+        embed_size = 256   #
+        self.fc1 = nn.Linear(nhid * nheads * n_gene // poolsize, embed_size)
+        self.fc2 = nn.Linear(embed_size + nn_embed, nclass)
+
+        self.decoder = nn.Linear(embed_size, n_gene)
+
+        self.nnfc1 = nn.Linear(n_gene, 512)
+        self.nnfc2 = nn.Linear(512, nn_embed)
 
 
     def forward(self, x, adj, conv_degree=3):
         L = [laplacian(adj, normalized=True)]
+        x_nn = deepcopy(x)
         x = x.unsqueeze(2)
         x = self.graph_conv_cheby(x, self.cl, L[0], self.GCNembed, conv_degree)
         x = F.relu(x)
         x = F.dropout(x, self.dropout, training=self.training)
         x = torch.cat([att(x, adj) for att in self.attentions], dim=2)
         x = F.dropout(x, self.dropout, training=self.training)
-        # x = F.relu(x)
+        x = F.relu(x)
         x = self.graph_max_pool(x)
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
+        
+        # extract embedded features for decoding --> reconstruction
+        x_enc = x
+        x_rec = self.decoder(x_enc)
+
+        # extract embedding features using nnfc layers
+        x_nn = F.relu(self.nnfc1(x_nn))
+        x_nn = F.relu(self.nnfc2(x_nn))
+
+        # concat nnfc and gcn-gat-pooling embeddings
+        x = torch.cat((x, x_nn), 1)
+
+        # class prediction
         x = F.relu(self.fc2(x))
-        # x = F.relu(self.fc3(x))
-        return F.log_softmax(x, dim=1)
+        y_preds = F.log_softmax(x, dim=1)
+
+        return x_rec, y_preds
+
+
+    def loss_func(self, x_rec, x_in, y_preds, y_labels):
+        rec_loss = nn.MSELoss()(x_rec, x_in)
+        class_loss = nn.NLLLoss()(y_preds, y_labels)
+        return 1 * rec_loss + 1 * class_loss
 
 
     def graph_conv_cheby(self, x, cl, L, Fout, K):

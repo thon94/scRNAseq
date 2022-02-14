@@ -16,15 +16,14 @@ from collections import Counter
 
 def spilt_dataset(train_all_data, labels, shuffle_index):
         
-    train_size, val_size = int(len(shuffle_index)* 0.8), int(len(shuffle_index)* 0.9)
+    train_size, val_size = int(len(shuffle_index)* 0.8), int(len(shuffle_index)* 1.0)
     train_data = np.asarray(train_all_data).astype(np.float32)[shuffle_index[0:train_size]]
     val_data = np.asarray(train_all_data).astype(np.float32)[shuffle_index[train_size:val_size]]
     test_data = np.asarray(train_all_data).astype(np.float32)[shuffle_index[val_size:]]
     train_labels = labels[shuffle_index[0:train_size]]
     val_labels = labels[shuffle_index[train_size:val_size]]
     test_labels = labels[shuffle_index[val_size:]]
-        
-    ll, cnt = np.unique(train_labels,return_counts=True)
+    # ll, cnt = np.unique(train_labels,return_counts=True)
     return train_data, val_data, test_data, train_labels, val_labels, test_labels
     
 
@@ -45,7 +44,10 @@ def generate_loader(train_data, val_data, test_data, train_labels, val_labels, t
     dset_val = Data.TensorDataset(val_data, val_labels)
     val_loader = Data.DataLoader(dset_val, batch_size = len(dset_val), shuffle = False)
     dset_test = Data.TensorDataset(test_data, test_labels)
-    test_loader = Data.DataLoader(dset_test, batch_size = len(dset_test), shuffle = False)
+    try:
+        test_loader = Data.DataLoader(dset_test, batch_size = len(dset_test), shuffle = False)
+    except ValueError:
+        test_loader = None
 
     # split validation set into smaller sets
     n_val_splits = 4
@@ -158,49 +160,59 @@ def load_labels(path, dataset):
 
 def load_largesc(path, dirAdj, dataset, net):
 
-    torch.manual_seed(1)
-    random.seed(1)
-
     if dataset == 'Zhengsorted':
-        # features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data.csv',index_col = 0, header = 0)
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data.csv',index_col = 0, header = 0, nrows=200)
+        csv_name = os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data.npz'
+        # npz_name = os.path.join(path + dataset) +'/Filtered_DownSampled_SortedPBMC_data_short.npz'
         
     elif dataset == 'TM':
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_TM_data.csv',index_col = 0, header = 0)
+        csv_name = os.path.join(path + dataset) +'/Filtered_TM_data.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_TM_data.npz'
         
     elif dataset == 'Xin':
-        #path = os.path.join(path, 'Pancreatic_data/')
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_Xin_HumanPancreas_data.csv',index_col = 0, header = 0)
+        csv_name = os.path.join(path + dataset) +'/Filtered_Xin_HumanPancreas_data.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_Xin_HumanPancreas_data.npz'
         
     elif dataset == 'BaronHuman':
-        #path = os.path.join(path, 'Pancreatic_data/')
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_Baron_HumanPancreas_data.csv',index_col = 0, header = 0)
+        csv_name = os.path.join(path + dataset) +'/Filtered_Baron_HumanPancreas_data.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_Baron_HumanPancreas_data.npz'
         
     elif dataset == 'BaronMouse':
-        #path = os.path.join(path, 'Pancreatic_data/')
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_MousePancreas_data.csv',index_col = 0, header = 0)
+        csv_name = os.path.join(path + dataset) +'/Filtered_MousePancreas_data.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_MousePancreas_data.npz'
 
     elif dataset == 'Muraro':
-        #path = os.path.join(path, 'Pancreatic_data/')
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_Muraro_HumanPancreas_data_renameCols.csv',index_col = 0, header = 0)
+        csv_name = os.path.join(path + dataset) +'/Filtered_Muraro_HumanPancreas_data_renameCols.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_Muraro_HumanPancreas_data_renameCols.npz'
 
     elif dataset == 'Segerstolpe':
-        #path = os.path.join(path, 'Pancreatic_data/')   
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_Segerstolpe_HumanPancreas_data.csv',index_col = 0, header = 0)
+        csv_name = os.path.join(path + dataset) +'/Filtered_Segerstolpe_HumanPancreas_data.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_Segerstolpe_HumanPancreas_data.npz'
 
     elif dataset == 'Zheng68K':
-        features = pd.read_csv(os.path.join(path + dataset) +'/Filtered_68K_PBMC_data.csv',index_col = 0, header = 0)
+        csv_name = os.path.join(path + dataset) +'/Filtered_68K_PBMC_data.csv'
+        npz_name = os.path.join(path + dataset) +'/Filtered_68K_PBMC_data.npz'
         
-    elif dataset == '10x_5cl':        
-        path = os.path.join(path, 'CellBench/') 
-        features = pd.read_csv(os.path.join(path + dataset) +'/10x_5cl_data.csv',index_col = 0, header = 0)
+    elif dataset == '10x_5cl':   
+        csv_name = os.path.join(path + dataset) +'/10x_5cl_data.csv'
+        npz_name = os.path.join(path + dataset) +'/10x_5cl_data.csv'
     
-    elif dataset == 'CelSeq2_5cl':        
-        path = os.path.join(path, 'CellBench/')
-        features = pd.read_csv(os.path.join(path + dataset) +'/CelSeq2_5cl_data.csv',index_col = 0, header = 0)
+    elif dataset == 'CelSeq2_5cl':     
+        csv_name = os.path.join(path + dataset) +'/CelSeq2_5cl_data.csv'
+        npz_name = os.path.join(path + dataset) +'/CelSeq2_5cl_data.csv'
+
+
+    if os.path.exists(npz_name):
+        print('Numpy dataset exists. Loading numpy dataset...')
+        features = np.load(npz_name, allow_pickle=True)['arr_0']
+    else:
+        print('Numpy dataset does not exist. Processing csv...')
+        features = pd.read_csv(csv_name, index_col = 0, header = 0)
+        features = findDuplicated(features)
+        features = np.asarray(features)
+        np.savez_compressed(npz_name, features)
          
-    features = findDuplicated(features)
-    print(features.shape)
+
     adj = sp.load_npz(dirAdj + 'adj'+ net + dataset + '_'+str(features.T.shape[0])+'.npz')
     print(adj.shape)
     labels = load_labels(path, dataset)
@@ -209,9 +221,7 @@ def load_largesc(path, dirAdj, dataset, net):
     except OSError:
         shuffle_index = None
     
-    return adj, np.asarray(features), labels,shuffle_index  # cells*genes
-
-
+    return adj, features, labels, shuffle_index  # cells*genes
 
 
 
